@@ -2,20 +2,32 @@ require "rubygems"
 require "json"
 require "net/http"
 require "uri"
+require "curb"
 
-def getConfig(filename)
-  data = ''
-  f = File.open(filename, "r") 
-  f.each_line do |line|
-    data += line
-  end
-  return JSON.parse data
+def getJSONFile(filename)
+	data = ''
+	file = File.open(filename, "r") 
+	file.each_line do |line|
+		data += line
+	end
+	return JSON.parse data
 end
 
-def getSession(email, password) #Get a Session Cookie
+def writeJSONFile(filename, data)
+	data = JSON.generate data
+	file = File.open(filename, "w")
+	file.write(data)	
+	return data
+end
+
+def getSession(email, password)
 	uri = URI.parse("http://distro.fm/api/login")
 	session = Net::HTTP.post_form(uri, { "email" => email, "password" => password })["set-cookie"]
 end
+
+# def checkSession(session)
+#     uri = URI.parse("http://omni:3000/api/library")
+# end
 
 def getTrackList(session)
 	uri = URI.parse("http://distro.fm/api/library/tracks")
@@ -25,9 +37,19 @@ def getTrackList(session)
 	tracks = JSON.parse(http.request(request).body)["data"]
 end
 
-config = getConfig("DistroSlurp.json")
+def downloadTracks(urlList)
+	Curl::Multi.download(urlList){|c,code,method| 
+		filename = c.url.split(/\?/).first.split(/\//).last
+		puts filename
+	}
+end
+
+config = getJSONFile("DistroSlurp.json")
 session = getSession(config["email"], config["password"])
+urlList = []
 trackListJSON = getTrackList(session)
 trackListJSON.each do |track|
-	puts "#{track['name']} : #{track['filename']}" 
+	url = "http://distro-music.s3.amazonaws.com/#{track['networkWithFile']['name']}/#{track['filename']}.mp3"
+	urlList.push url
 end
+downloadTracks(urlList)
